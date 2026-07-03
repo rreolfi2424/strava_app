@@ -1,11 +1,15 @@
 import os
+
 import pandas as pd
 import requests
 import streamlit as st
 from dotenv import load_dotenv
-import datetime
 
 load_dotenv()
+
+
+class StravaApiError(Exception):
+    pass
 
 
 @st.cache_data(ttl=3000)
@@ -18,9 +22,15 @@ def get_access_token():
             "refresh_token": os.getenv("STRAVA_REFRESH_TOKEN"),
             "grant_type": "refresh_token",
         },
+        timeout=20,
     )
-    response.raise_for_status()
-    return response.json()["access_token"]
+    if response.status_code != 200:
+        raise StravaApiError(f"Token request failed ({response.status_code}): {response.text}")
+
+    payload = response.json()
+    if "access_token" not in payload:
+        raise StravaApiError("Token response did not include an access token.")
+    return payload["access_token"]
 
 
 @st.cache_data(ttl=3000)
@@ -32,9 +42,17 @@ def get_activities(access_token, per_page=100):
             "https://www.strava.com/api/v3/athlete/activities",
             headers={"Authorization": f"Bearer {access_token}"},
             params={"per_page": per_page, "page": page},
+            timeout=20,
         )
-        response.raise_for_status()
+        if response.status_code != 200:
+            if response.status_code == 429:
+                raise StravaApiError("Strava rate limit exceeded. Please wait a moment and try again.")
+            raise StravaApiError(f"Activities request failed ({response.status_code}): {response.text}")
+
         data = response.json()
+        if isinstance(data, dict):
+            message = data.get("message", "Unexpected Strava response")
+            raise StravaApiError(message)
         if not data:
             break
         activities.extend(data)
@@ -43,6 +61,8 @@ def get_activities(access_token, per_page=100):
 
 
 st.title("My Strava Dashboard")
+
+df = pd.DataFrame()
 
 try:
     token = get_access_token()
@@ -55,6 +75,12 @@ if df.empty:
     st.info("No Strava activities were returned.")
     st.stop()
 
+required_columns = {"type", "start_date_local", "distance", "name"}
+missing_columns = required_columns.difference(df.columns)
+if missing_columns:
+    st.error(f"The Strava response is missing expected columns: {', '.join(sorted(missing_columns))}")
+    st.stop()
+
 runs = df[df["type"] == "Run"].copy()
 if runs.empty:
     st.info("No running activities were found.")
@@ -63,7 +89,8 @@ if runs.empty:
 runs["start_date"] = pd.to_datetime(runs["start_date_local"]).dt.tz_localize(None)
 runs["distance_mi"] = runs["distance"] / 1000 * 0.621371
 
-three_months_ago = datetime.now() - datetime.timedelta(days=90)
+now = pd.Timestamp.now().normalize()
+three_months_ago = now - pd.DateOffset(months=3)
 runs = runs[runs["start_date"] >= three_months_ago].copy()
 
 if runs.empty:
@@ -74,7 +101,7 @@ runs["week_start"] = runs["start_date"].dt.to_period("W-MON").apply(lambda perio
 
 week_starts = pd.date_range(
     start=(three_months_ago - pd.to_timedelta(three_months_ago.weekday(), unit="D")).normalize(),
-    end=(datetime.now() - pd.to_timedelta(datetime.now().weekday(), unit="D")).normalize(),
+    end=(now - pd.to_timedelta(now.weekday(), unit="D")).normalize(),
     freq="W-MON",
 )
 
