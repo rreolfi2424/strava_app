@@ -1,12 +1,13 @@
-import streamlit as st
-import requests
-import pandas as pd
 import os
+import pandas as pd
+import requests
+import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
 
-@st.cache_data(ttl=3000)  # cache for 50 min, tokens last ~6 hours
+
+@st.cache_data(ttl=3000)
 def get_access_token():
     response = requests.post(
         "https://www.strava.com/oauth/token",
@@ -17,43 +18,104 @@ def get_access_token():
             "grant_type": "refresh_token",
         },
     )
+    response.raise_for_status()
     return response.json()["access_token"]
+
 
 @st.cache_data(ttl=3000)
 def get_activities(access_token, per_page=100):
     activities = []
     page = 1
     while True:
-        r = requests.get(
+        response = requests.get(
             "https://www.strava.com/api/v3/athlete/activities",
             headers={"Authorization": f"Bearer {access_token}"},
             params={"per_page": per_page, "page": page},
         )
-        data = r.json()
+        response.raise_for_status()
+        data = response.json()
         if not data:
             break
         activities.extend(data)
         page += 1
     return pd.DataFrame(activities)
 
+
 st.title("My Strava Dashboard")
 
-token = get_access_token()
-df = get_activities(token)
+try:
+    token = get_access_token()
+    df = get_activities(token)
+except Exception as exc:
+    st.error(f"Unable to load Strava data: {exc}")
+    st.stop()
 
-# Filter to runs and rides
-df = df[df["type"].isin(["Run", "Ride"])]
-df["start_date"] = pd.to_datetime(df["start_date_local"])
-df["distance_km"] = df["distance"] / 1000
+if df.empty:
+    st.info("No Strava activities were returned.")
+    st.stop()
 
-st.metric("Total Activities", len(df))
-st.metric("Total Distance (km)", round(df["distance_km"].sum(), 1))
+runs = df[df["type"] == "Run"].copy()
+if runs.empty:
+    st.info("No running activities were found.")
+    st.stop()
 
-col1, col2 = st.columns(2)
-with col1:
-    activity_type = st.selectbox("Activity Type", ["All"] + df["type"].unique().tolist())
+runs["start_date"] = pd.to_datetime(runs["start_date_local"])
+runs["distance_mi"] = runs["distance"] / 1000 * 0.621371
 
-filtered = df if activity_type == "All" else df[df["type"] == activity_type]
+now = pd.Timestamp.today().normalize()
+three_months_ago = now - pd.DateOffset(months=3)
+runs = runs[runs["start_date"] >= three_months_ago].copy()
 
-st.line_chart(filtered.set_index("start_date")["distance_km"])
-st.dataframe(filtered[["name", "type", "start_date", "distance_km", "moving_time"]])
+if runs.empty:
+    st.info("No recent running activities were found in the last 3 months.")
+    st.stop()
+
+runs["week_start"] = runs["start_date"].dt.to_period("W-MON").apply(lambda period: period.start_time)
+
+week_starts = pd.date_range(
+    start=(three_months_ago - pd.to_timedelta(three_months_ago.weekday(), unit="D")).normalize(),
+    end=(now - pd.to_timedelta(now.weekday(), unit="D")).normalize(),
+    freq="W-MON",
+)
+
+weekly_totals = []
+for week_start in week_starts:
+    week_runs = runs[(runs["start_date"] >= week_start) & (runs["start_date"] < week_start + pd.Timedelta(days=7))]
+    weekly_totals.append({
+        "week_start": week_start,
+        "miles": round(week_runs["distance_mi"].sum(), 2),
+    })
+
+weekly_totals_df = pd.DataFrame(weekly_totals).sort_values("week_start")
+weekly_totals_df["week_label"] = weekly_totals_df["week_start"].dt.strftime("%b %d, %Y")
+
+st.subheader("Running miles by week (last 3 months)")
+st.line_chart(weekly_totals_df.set_index("week_start")["miles"])
+
+selected_week_label = st.selectbox(
+    "Select a week",
+    options=weekly_totals_df["week_label"].tolist(),
+    index=weekly_totals_df["week_label"].tolist().index(weekly_totals_df.iloc[-1]["week_label"]),
+)
+selected_week_start = weekly_totals_df.loc[weekly_totals_df["week_label"] == selected_week_label, "week_start"].iloc[0]
+
+week_runs = runs[(runs["start_date"] >= selected_week_start) & (runs["start_date"] < selected_week_start + pd.Timedelta(days=7))]
+
+selected_week_total = round(week_runs["distance_mi"].sum(), 2)
+st.metric("Selected week total miles", selected_week_total)
+
+rows = []
+for offset in range(7):
+    day_start = selected_week_start + pd.Timedelta(days=offset)
+    day_end = day_start + pd.Timedelta(days=1)
+    day_runs = week_runs[(week_runs["start_date"] >= day_start) & (week_runs["start_date"] < day_end)]
+    rows.append({
+        "Day": day_start.strftime("%A"),
+        "Date": day_start.strftime("%b %d"),
+        "Miles": round(day_runs["distance_mi"].sum(), 2),
+        "Runs": "; ".join(day_runs["name"].tolist()) if not day_runs.empty else "No runs",
+    })
+
+week_table = pd.DataFrame(rows)
+st.subheader("Runs for the selected week")
+st.dataframe(week_table[["Day", "Date", "Miles", "Runs"]], use_container_width=True, hide_index=True)
