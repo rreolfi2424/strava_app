@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import streamlit as st
 from dotenv import load_dotenv
+import datetime
 
 load_dotenv()
 
@@ -59,11 +60,10 @@ if runs.empty:
     st.info("No running activities were found.")
     st.stop()
 
-runs["start_date"] = pd.to_datetime(runs["start_date_local"])
+runs["start_date"] = pd.to_datetime(runs["start_date_local"]).dt.tz_localize(None)
 runs["distance_mi"] = runs["distance"] / 1000 * 0.621371
 
-now = pd.Timestamp.today().normalize()
-three_months_ago = now - pd.DateOffset(months=3)
+three_months_ago = datetime.now() - datetime.timedelta(days=90)
 runs = runs[runs["start_date"] >= three_months_ago].copy()
 
 if runs.empty:
@@ -74,7 +74,7 @@ runs["week_start"] = runs["start_date"].dt.to_period("W-MON").apply(lambda perio
 
 week_starts = pd.date_range(
     start=(three_months_ago - pd.to_timedelta(three_months_ago.weekday(), unit="D")).normalize(),
-    end=(now - pd.to_timedelta(now.weekday(), unit="D")).normalize(),
+    end=(datetime.now() - pd.to_timedelta(datetime.now().weekday(), unit="D")).normalize(),
     freq="W-MON",
 )
 
