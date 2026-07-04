@@ -324,10 +324,15 @@ st.line_chart(
     color=[ACTUAL_COLOR, PLANNED_COLOR],
 )
 
+week_labels = weekly_totals_df["week_label"].tolist()
+current_week_label = now.strftime("%b %d, %Y")
+if current_week_label not in week_labels:
+    current_week_label = week_labels[-1]
+
 selected_week_label = st.selectbox(
     "Select a week",
-    options=weekly_totals_df["week_label"].tolist(),
-    index=weekly_totals_df["week_label"].tolist().index(weekly_totals_df.iloc[-1]["week_label"]),
+    options=week_labels,
+    index=week_labels.index(current_week_label),
 )
 selected_week_start = weekly_totals_df.loc[weekly_totals_df["week_label"] == selected_week_label, "week_start"].iloc[0]
 selected_week_key = selected_week_start.strftime("%Y-%m-%d")
