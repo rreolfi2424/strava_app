@@ -273,33 +273,35 @@ st.subheader("Plan for selected week")
 plan_total = round(plan_df["planned_distance_mi"].sum(), 2)
 st.metric("Planned miles for this week", plan_total)
 
-with st.form(f"plan_form_{selected_week_key}", clear_on_submit=True):
-    fcol1, fcol2, fcol3 = st.columns(3)
-    with fcol1:
-        day = st.selectbox(
-            "Day",
-            ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-        )
-    with fcol2:
-        plan_type = st.selectbox("Type", ["Run", "Ride"])
-    with fcol3:
-        distance = st.number_input("Planned Distance (mi)", min_value=0.0, step=0.5)
+st.caption("Edit the week plan directly below. Changes are saved for the selected week as you work.")
 
-    submitted = st.form_submit_button("Add to Plan")
-    if submitted:
-        new_row = pd.DataFrame(
-            [{"week_start": selected_week_key, "day": day, "type": plan_type, "planned_distance_mi": distance}]
-        )
-        plan_df = pd.concat([plan_df, new_row], ignore_index=True)
-        save_plan(plan_df, week_start=selected_week_start)
-        st.success(f"Added {distance}mi {plan_type} on {day}")
-        st.rerun()
+day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+plan_editor_df = pd.DataFrame({
+    "day": day_order,
+    "type": ["Run"] * 7,
+    "planned_distance_mi": [0.0] * 7,
+})
 
 if not plan_df.empty:
-    edited = st.data_editor(plan_df, num_rows="dynamic", key=f"plan_editor_{selected_week_key}")
-    if st.button("Save Changes", key=f"save_plan_{selected_week_key}"):
-        save_plan(edited, week_start=selected_week_start)
-        st.success("Plan updated")
-        st.rerun()
-else:
-    st.info("No plan entries for this week yet.")
+    for _, row in plan_df.iterrows():
+        day_name = row.get("day")
+        if day_name in day_order:
+            plan_editor_df.loc[plan_editor_df["day"] == day_name, "type"] = row.get("type", "Run")
+            plan_editor_df.loc[plan_editor_df["day"] == day_name, "planned_distance_mi"] = row.get("planned_distance_mi", 0.0)
+
+plan_editor_df["day"] = pd.Categorical(plan_editor_df["day"], categories=day_order, ordered=True)
+plan_editor_df = plan_editor_df.sort_values("day").reset_index(drop=True)
+
+edited_plan_df = st.data_editor(
+    plan_editor_df,
+    hide_index=True,
+    disabled=["day"],
+    use_container_width=True,
+    key=f"plan_editor_{selected_week_key}",
+)
+
+if edited_plan_df is not None:
+    edited_plan_df = edited_plan_df.copy()
+    edited_plan_df["week_start"] = selected_week_key
+    save_plan(edited_plan_df, week_start=selected_week_start)
