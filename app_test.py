@@ -179,15 +179,15 @@ st.markdown(
     """
     <style>
     .stApp {
-        background: linear-gradient(135deg, #f5f0ff 0%, #efe7ff 100%);
-        color: #3b176d;
+        background: linear-gradient(135deg, #140c24 0%, #1d1133 100%);
+        color: #f3ebff;
     }
     .stTitle, .stSubheader, .stHeader {
-        color: #5b2a86;
+        color: #d8c2ff;
     }
     .stMetric {
-        background-color: #f2e8ff;
-        border: 1px solid #cdb6ff;
+        background-color: #24153f;
+        border: 1px solid #7c4dff;
         border-radius: 8px;
         padding: 8px;
     }
@@ -198,10 +198,12 @@ st.markdown(
     .stButton > button, .stDownloadButton > button {
         background-color: #7c4dff;
         color: white;
-        border: 1px solid #6a3fe6;
+        border: 1px solid #a78bfa;
     }
     .stTextInput > div > div > input, .stSelectbox > div > div > div, .stNumberInput > div > div > input {
-        border: 1px solid #b794f6;
+        border: 1px solid #7c4dff;
+        background-color: #24153f;
+        color: #f3ebff;
     }
     </style>
     """,
