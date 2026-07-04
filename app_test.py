@@ -11,6 +11,13 @@ from google.oauth2.service_account import Credentials
 
 load_dotenv()
 
+ACTUAL_COLOR = "#ff6f91"
+PLANNED_COLOR = "#7c4dff"
+ACTUAL_FILL = "#3a2028"
+PLANNED_FILL = "#241b47"
+ACTUAL_TEXT = "#ffe8ee"
+PLANNED_TEXT = "#efe8ff"
+
 # ---------------------------------------------------------------------------
 # Secrets helper (works both locally with .env and on Streamlit Cloud)
 # ---------------------------------------------------------------------------
@@ -26,7 +33,7 @@ def get_secret(key):
 # Strava auth + data fetching
 # ---------------------------------------------------------------------------
 
-st.write("Client ID:", repr(get_secret("STRAVA_CLIENT_ID")))
+# st.write("Client ID:", repr(get_secret("STRAVA_CLIENT_ID")))
 
 
 class StravaApiError(Exception):
@@ -211,6 +218,38 @@ st.markdown(
         background-color: #24153f;
         color: #f3ebff;
     }
+    .metric-card {
+        border-radius: 12px;
+        padding: 14px 16px;
+        margin-bottom: 8px;
+        border: 1px solid rgba(255,255,255,0.12);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    }
+    .metric-card.actual {
+        background: linear-gradient(135deg, #3a2028 0%, #5a2736 100%);
+        border-color: #ff6f91;
+    }
+    .metric-card.planned {
+        background: linear-gradient(135deg, #241b47 0%, #3a2b67 100%);
+        border-color: #7c4dff;
+    }
+    .metric-card .metric-label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #e4daff;
+    }
+    .metric-card .metric-value {
+        font-size: 1.55rem;
+        font-weight: 700;
+        margin-top: 4px;
+        color: #ffffff;
+    }
+    .metric-card .metric-subtext {
+        font-size: 0.85rem;
+        color: #d8c2ff;
+        margin-top: 4px;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -257,7 +296,7 @@ runs["week_start"] = runs["start_date"].dt.to_period("W-MON").apply(lambda perio
 
 week_starts = pd.date_range(
     start=(three_months_ago - pd.to_timedelta(three_months_ago.weekday(), unit="D")).normalize(),
-    end=(now - pd.to_timedelta(now.weekday(), unit="D")).normalize(),
+    end=(now + pd.Timedelta(days=28) - pd.to_timedelta((now + pd.Timedelta(days=28)).weekday(), unit="D")).normalize(),
     freq="W-MON",
 )
 
@@ -282,7 +321,7 @@ weekly_totals_df["Planned Miles"] = plan_totals
 st.subheader("Running miles by week (last 3 months)")
 st.line_chart(
     weekly_totals_df.set_index("week_start")[["Actual Miles", "Planned Miles"]],
-    color=["#a02196", "#8200ec"],
+    color=[ACTUAL_COLOR, PLANNED_COLOR],
 )
 
 selected_week_label = st.selectbox(
@@ -298,8 +337,29 @@ selected_week_total = round(week_runs["distance_mi"].sum(), 1)
 plan_df = load_plan(selected_week_start)
 planned_week_total = round(plan_df["planned_distance_mi"].sum(), 2)
 weekly_delta = round(selected_week_total - planned_week_total, 1)
-metric_label = f"Selected week total miles ({weekly_delta:+.1f})"
-st.metric(metric_label, selected_week_total)
+col1, col2 = st.columns(2)
+with col1:
+    st.markdown(
+        f"""
+        <div class="metric-card actual">
+            <div class="metric-label">Actual miles</div>
+            <div class="metric-value">{selected_week_total:.1f}</div>
+            <div class="metric-subtext">{weekly_delta:+.1f} vs planned</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with col2:
+    st.markdown(
+        f"""
+        <div class="metric-card planned">
+            <div class="metric-label">Planned miles</div>
+            <div class="metric-value">{planned_week_total:.2f}</div>
+            <div class="metric-subtext">Target for selected week</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 rows = []
 for offset in range(7):
@@ -317,13 +377,30 @@ for offset in range(7):
         "Runs": "; ".join(day_runs["name"].tolist()) if not day_runs.empty else "No runs",
     })
 
-# add planned total next to the actua total metric
-planned_week_total = round(plan_df["planned_distance_mi"].sum(), 2)
-st.metric("Planned miles for this week", planned_week_total)
-
 week_table = pd.DataFrame(rows)
 st.subheader("Planned vs. Actual Miles for Week of " + selected_week_start.strftime("%b %d, %Y"))
-st.dataframe(week_table[["day", "Date", "planned_distance_mi", "Actual (mi)", "Runs"]], use_container_width=True, hide_index=True)
+styled_week_table = (
+    week_table[["day", "Date", "planned_distance_mi", "Actual (mi)", "Runs"]]
+    .style.apply(
+        lambda col: [
+            f"background-color: {PLANNED_FILL}; color: {PLANNED_TEXT}; font-weight: 600;"
+            if col.name == "planned_distance_mi"
+            else ""
+            for _ in col
+        ],
+        axis=0,
+    )
+    .apply(
+        lambda col: [
+            f"background-color: {ACTUAL_FILL}; color: {ACTUAL_TEXT}; font-weight: 600;"
+            if col.name == "Actual (mi)"
+            else ""
+            for _ in col
+        ],
+        axis=0,
+    )
+)
+st.dataframe(styled_week_table, use_container_width=True, hide_index=True)
 
 st.divider()
 
