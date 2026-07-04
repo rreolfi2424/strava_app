@@ -325,9 +325,12 @@ st.line_chart(
 )
 
 week_labels = weekly_totals_df["week_label"].tolist()
-current_week_label = now.strftime("%b %d, %Y")
-if current_week_label not in week_labels:
+current_week_start = (now - pd.to_timedelta(now.weekday(), unit="D")).normalize()
+current_week_row = weekly_totals_df[weekly_totals_df["week_start"] == current_week_start]
+if current_week_row.empty:
     current_week_label = week_labels[-1]
+else:
+    current_week_label = current_week_row.iloc[0]["week_label"]
 
 selected_week_label = st.selectbox(
     "Select a week",
