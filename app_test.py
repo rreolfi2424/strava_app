@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import requests
@@ -100,9 +101,11 @@ def load_plan():
     sheet = get_sheet()
     records = sheet.get_all_records()
     if not records:
-        return pd.DataFrame(columns=["day", "type", "planned_distance_km"])
+        return pd.DataFrame(columns=["day", "type", "planned_distance_mi"])
     df = pd.DataFrame(records)
-    df["planned_distance_km"] = pd.to_numeric(df["planned_distance_km"], errors="coerce").fillna(0)
+    if "planned_distance_mi" not in df.columns:
+        df["planned_distance_mi"] = 0.0
+    df["planned_distance_mi"] = pd.to_numeric(df["planned_distance_mi"], errors="coerce").fillna(0)
     return df
 
 
