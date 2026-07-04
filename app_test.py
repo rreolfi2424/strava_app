@@ -26,6 +26,9 @@ def get_secret(key):
 # Strava auth + data fetching
 # ---------------------------------------------------------------------------
 
+st.write("Client ID:", repr(get_secret("STRAVA_CLIENT_ID")))
+
+
 class StravaApiError(Exception):
     pass
 
