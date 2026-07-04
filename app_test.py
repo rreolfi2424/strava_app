@@ -101,69 +101,69 @@ def load_plan(week_start=None):
     sheet = get_sheet()
     records = sheet.get_all_records()
     if not records:
-        return pd.DataFrame(columns=["Week Start", "Day", "Type", "Planned (mi)"])
+        return pd.DataFrame(columns=["week_start", "day", "type", "planned_distance_mi"])
 
     df = pd.DataFrame(records)
     if df.empty:
-        return pd.DataFrame(columns=["Week Start", "Day", "Type", "Planned (mi)"])
+        return pd.DataFrame(columns=["week_start", "day", "type", "planned_distance_mi"])
 
-    if "Week Start" not in df.columns:
-        df["Week Start"] = ""
-    if "Day" not in df.columns:
-        df["Day"] = ""
-    if "Type" not in df.columns:
-        df["Type"] = "Run"
-    if "Planned (mi)" not in df.columns:
-        df["Planned (mi)"] = 0.0
+    if "week_start" not in df.columns:
+        df["week_start"] = ""
+    if "day" not in df.columns:
+        df["day"] = ""
+    if "type" not in df.columns:
+        df["type"] = "Run"
+    if "planned_distance_mi" not in df.columns:
+        df["planned_distance_mi"] = 0.0
 
-    df["Planned (mi)"] = pd.to_numeric(df["Planned (mi)"], errors="coerce").fillna(0)
-    df["Week Start"] = df["Week Start"].fillna("").astype(str)
+    df["planned_distance_mi"] = pd.to_numeric(df["planned_distance_mi"], errors="coerce").fillna(0)
+    df["week_start"] = df["week_start"].fillna("").astype(str)
 
     if week_start is None:
         return df
 
     week_key = week_start.strftime("%Y-%m-%d") if hasattr(week_start, "strftime") else str(week_start)
-    filtered = df[df["Week Start"] == week_key].copy()
+    filtered = df[df["week_start"] == week_key].copy()
     if not filtered.empty:
         return filtered
 
-    legacy = df[df["Week Start"] == ""].copy()
+    legacy = df[df["week_start"] == ""].copy()
     if not legacy.empty:
-        legacy["Week Start"] = week_key
+        legacy["week_start"] = week_key
         return legacy
 
-    return pd.DataFrame(columns=["Week Start", "Day", "Type", "Planned (mi)"])
+    return pd.DataFrame(columns=["week_start", "day", "type", "planned_distance_mi"])
 
 
 def save_plan(df, week_start=None):
     sheet = get_sheet()
     existing = load_plan()
 
-    week_df = pd.DataFrame(columns=["Week Start", "Day", "Type", "Planned (mi)"])
+    week_df = pd.DataFrame(columns=["week_start", "day", "type", "planned_distance_mi"])
     if not df.empty:
         week_df = df.copy()
-        if "Week Start" not in week_df.columns:
-            week_df["Week Start"] = ""
-        if "Day" not in week_df.columns:
-            week_df["Day"] = ""
-        if "Type" not in week_df.columns:
-            week_df["Type"] = "Run"
-        if "Planned (mi)" not in week_df.columns:
-            week_df["Planned (mi)"] = 0.0
-        week_df["Planned (mi)"] = pd.to_numeric(week_df["Planned (mi)"], errors="coerce").fillna(0)
-        week_df["Week Start"] = week_df["Week Start"].fillna("").astype(str)
+        if "week_start" not in week_df.columns:
+            week_df["week_start"] = ""
+        if "day" not in week_df.columns:
+            week_df["day"] = ""
+        if "type" not in week_df.columns:
+            week_df["type"] = "Run"
+        if "planned_distance_mi" not in week_df.columns:
+            week_df["planned_distance_mi"] = 0.0
+        week_df["planned_distance_mi"] = pd.to_numeric(week_df["planned_distance_mi"], errors="coerce").fillna(0)
+        week_df["week_start"] = week_df["week_start"].fillna("").astype(str)
 
     if week_start is not None:
         week_key = week_start.strftime("%Y-%m-%d") if hasattr(week_start, "strftime") else str(week_start)
-        existing = existing[existing["Week Start"] != week_key]
-        week_df["Week Start"] = week_key
+        existing = existing[existing["week_start"] != week_key]
+        week_df["week_start"] = week_key
         combined = pd.concat([existing, week_df], ignore_index=True)
     else:
         combined = week_df
 
     sheet.clear()
     if combined.empty:
-        sheet.update([["Week Start", "Day", "Type", "Planned (mi)"]])
+        sheet.update([["week_start", "day", "type", "planned_distance_mi"]])
     else:
         values = [combined.columns.astype(str).tolist()]
         for row in combined.itertuples(index=False, name=None):
@@ -262,23 +262,23 @@ weekly_totals = []
 for week_start in week_starts:
     week_runs = runs[(runs["start_date"] >= week_start) & (runs["start_date"] < week_start + pd.Timedelta(days=7))]
     weekly_totals.append({
-        "Week Start": week_start,
+        "week_start": week_start,
         "Actual Miles": round(week_runs["distance_mi"].sum(), 1),
     })
 
-weekly_totals_df = pd.DataFrame(weekly_totals).sort_values("Week Start")
-weekly_totals_df["week_label"] = weekly_totals_df["Week Start"].dt.strftime("%b %d, %Y")
+weekly_totals_df = pd.DataFrame(weekly_totals).sort_values("week_start")
+weekly_totals_df["week_label"] = weekly_totals_df["week_start"].dt.strftime("%b %d, %Y")
 
 plan_totals = []
-for week_start in weekly_totals_df["Week Start"]:
+for week_start in weekly_totals_df["week_start"]:
     week_plan = load_plan(week_start)
-    plan_totals.append(round(week_plan["Planned (mi)"].sum(), 2))
+    plan_totals.append(round(week_plan["planned_distance_mi"].sum(), 2))
 
 weekly_totals_df["Planned Miles"] = plan_totals
 
 st.subheader("Running miles by week (last 3 months)")
 st.line_chart(
-    weekly_totals_df.set_index("Week Start")[["Actual Miles", "Planned Miles"]],
+    weekly_totals_df.set_index("week_start")[["Actual Miles", "Planned Miles"]],
     color=["#a02196", "#8200ec"],
 )
 
@@ -287,13 +287,13 @@ selected_week_label = st.selectbox(
     options=weekly_totals_df["week_label"].tolist(),
     index=weekly_totals_df["week_label"].tolist().index(weekly_totals_df.iloc[-1]["week_label"]),
 )
-selected_week_start = weekly_totals_df.loc[weekly_totals_df["week_label"] == selected_week_label, "Week Start"].iloc[0]
+selected_week_start = weekly_totals_df.loc[weekly_totals_df["week_label"] == selected_week_label, "week_start"].iloc[0]
 selected_week_key = selected_week_start.strftime("%Y-%m-%d")
 
 week_runs = runs[(runs["start_date"] >= selected_week_start) & (runs["start_date"] < selected_week_start + pd.Timedelta(days=7))]
 selected_week_total = round(week_runs["distance_mi"].sum(), 1)
 plan_df = load_plan(selected_week_start)
-planned_week_total = round(plan_df["Planned (mi)"].sum(), 2)
+planned_week_total = round(plan_df["planned_distance_mi"].sum(), 2)
 weekly_delta = round(selected_week_total - planned_week_total, 1)
 metric_label = f"Selected week total miles ({weekly_delta:+.1f})"
 st.metric(metric_label, selected_week_total)
@@ -304,23 +304,23 @@ for offset in range(7):
     day_end = day_start + pd.Timedelta(days=1)
     day_runs = week_runs[(week_runs["start_date"] >= day_start) & (week_runs["start_date"] < day_end)]
     day_name = day_start.strftime("%A")
-    planned_day_rows = plan_df[(plan_df["Day"] == day_name) & (plan_df["Type"] == "Run")]
-    planned_miles = round(planned_day_rows["Planned (mi)"].sum(), 2) if not planned_day_rows.empty else 0.0
+    planned_day_rows = plan_df[(plan_df["day"] == day_name) & (plan_df["type"] == "Run")]
+    planned_miles = round(planned_day_rows["planned_distance_mi"].sum(), 2) if not planned_day_rows.empty else 0.0
     rows.append({
-        "Day": day_name,
+        "day": day_name,
         "Date": day_start.strftime("%b %d"),
-        "Planned (mi)": planned_miles,
+        "planned_distance_mi": planned_miles,
         "Actual (mi)": round(day_runs["distance_mi"].sum(), 1),
         "Runs": "; ".join(day_runs["name"].tolist()) if not day_runs.empty else "No runs",
     })
 
 # add planned total next to the actua total metric
-planned_week_total = round(plan_df["Planned (mi)"].sum(), 2)
+planned_week_total = round(plan_df["planned_distance_mi"].sum(), 2)
 st.metric("Planned miles for this week", planned_week_total)
 
 week_table = pd.DataFrame(rows)
 st.subheader("Planned vs. Actual Miles for Week of " + selected_week_start.strftime("%b %d, %Y"))
-st.dataframe(week_table[["Day", "Date", "Planned (mi)", "Actual (mi)", "Runs"]], use_container_width=True, hide_index=True)
+st.dataframe(week_table[["day", "Date", "planned_distance_mi", "Actual (mi)", "Runs"]], use_container_width=True, hide_index=True)
 
 st.divider()
 
@@ -333,30 +333,30 @@ st.subheader("Edit Weekly Plan")
 day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 plan_editor_df = pd.DataFrame({
-    "Day": day_order,
-    "Type": ["Run"] * 7,
-    "Planned (mi)": [0.0] * 7,
+    "day": day_order,
+    "type": ["Run"] * 7,
+    "planned_distance_mi": [0.0] * 7,
 })
 
 if not plan_df.empty:
     for _, row in plan_df.iterrows():
-        day_name = row.get("Day", "")
+        day_name = row.get("day", "")
         if day_name in day_order:
-            plan_editor_df.loc[plan_editor_df["Day"] == day_name, "Type"] = row.get("Type", "Run")
-            plan_editor_df.loc[plan_editor_df["Day"] == day_name, "Planned (mi)"] = row.get("Planned (mi)", 0.0)
+            plan_editor_df.loc[plan_editor_df["day"] == day_name, "type"] = row.get("type", "Run")
+            plan_editor_df.loc[plan_editor_df["day"] == day_name, "planned_distance_mi"] = row.get("planned_distance_mi", 0.0)
 
-plan_editor_df["Day"] = pd.Categorical(plan_editor_df["Day"], categories=day_order, ordered=True)
-plan_editor_df = plan_editor_df.sort_values("Day").reset_index(drop=True)
+plan_editor_df["day"] = pd.Categorical(plan_editor_df["day"], categories=day_order, ordered=True)
+plan_editor_df = plan_editor_df.sort_values("day").reset_index(drop=True)
 
 edited_plan_df = st.data_editor(
     plan_editor_df,
     hide_index=True,
-    disabled=["Day"],
+    disabled=["day"],
     use_container_width=True,
     key=f"plan_editor_{selected_week_key}",
 )
 
 if edited_plan_df is not None:
     edited_plan_df = edited_plan_df.copy()
-    edited_plan_df["Week Start"] = selected_week_key
+    edited_plan_df["week_start"] = selected_week_key
     save_plan(edited_plan_df, week_start=selected_week_start)
