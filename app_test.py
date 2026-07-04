@@ -174,6 +174,40 @@ def save_plan(df, week_start=None):
 
 
 st.set_page_config(page_title="RR Running Tracker", layout="wide")
+
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background: linear-gradient(135deg, #f5f0ff 0%, #efe7ff 100%);
+        color: #3b176d;
+    }
+    .stTitle, .stSubheader, .stHeader {
+        color: #5b2a86;
+    }
+    .stMetric {
+        background-color: #f2e8ff;
+        border: 1px solid #cdb6ff;
+        border-radius: 8px;
+        padding: 8px;
+    }
+    div[data-testid="stDataFrame"] {
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .stButton > button, .stDownloadButton > button {
+        background-color: #7c4dff;
+        color: white;
+        border: 1px solid #6a3fe6;
+    }
+    .stTextInput > div > div > input, .stSelectbox > div > div > div, .stNumberInput > div > div > input {
+        border: 1px solid #b794f6;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 st.title("RR Running Tracker")
 
 df = pd.DataFrame()
@@ -230,8 +264,18 @@ for week_start in week_starts:
 weekly_totals_df = pd.DataFrame(weekly_totals).sort_values("week_start")
 weekly_totals_df["week_label"] = weekly_totals_df["week_start"].dt.strftime("%b %d, %Y")
 
+plan_totals = []
+for week_start in weekly_totals_df["week_start"]:
+    week_plan = load_plan(week_start)
+    plan_totals.append(round(week_plan["planned_distance_mi"].sum(), 2))
+
+weekly_totals_df["planned_miles"] = plan_totals
+
 st.subheader("Running miles by week (last 3 months)")
-st.line_chart(weekly_totals_df.set_index("week_start")["miles"])
+st.line_chart(
+    weekly_totals_df.set_index("week_start")[["miles", "planned_miles"]],
+    color=["#7c4dff", "#b794f6"],
+)
 
 selected_week_label = st.selectbox(
     "Select a week",
@@ -262,6 +306,10 @@ for offset in range(7):
         "Actual (mi)": round(day_runs["distance_mi"].sum(), 2),
         "Runs": "; ".join(day_runs["name"].tolist()) if not day_runs.empty else "No runs",
     })
+
+# add planned total next to the actua total metric
+planned_week_total = round(plan_df["planned_distance_mi"].sum(), 2)
+st.metric("Planned miles for this week", planned_week_total)
 
 week_table = pd.DataFrame(rows)
 st.subheader("Runs for the selected week")
