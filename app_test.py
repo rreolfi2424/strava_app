@@ -165,7 +165,10 @@ def save_plan(df, week_start=None):
     if combined.empty:
         sheet.update([["week_start", "day", "type", "planned_distance_mi"]])
     else:
-        sheet.update([combined.columns.values.tolist()] + combined.values.tolist())
+        values = [combined.columns.astype(str).tolist()]
+        for row in combined.itertuples(index=False, name=None):
+            values.append([str(item) for item in row])
+        sheet.update(values)
 
 
 # ---------------------------------------------------------------------------
