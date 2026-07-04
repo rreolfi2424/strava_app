@@ -370,20 +370,23 @@ for offset in range(7):
     planned_day_rows = plan_df[(plan_df["day"] == day_name) & (plan_df["type"] == "Run")]
     planned_miles = round(planned_day_rows["planned_distance_mi"].sum(), 1) if not planned_day_rows.empty else 0.0
     rows.append({
-        "Day": day_name,
+        "day": day_name,
         "Date": day_start.strftime("%b %d"),
-        "Planned (mi)": planned_miles,
+        "planned_distance_mi": planned_miles,
         "Actual (mi)": round(day_runs["distance_mi"].sum(), 1),
         "Runs": "; ".join(day_runs["name"].tolist()) if not day_runs.empty else "No runs",
     })
 
 week_table = pd.DataFrame(rows)
-week_table["Planned (mi)"] = week_table["Planned (mi)"].round(1)
+week_table["planned_distance_mi"] = week_table["planned_distance_mi"].round(1)
 week_table["Actual (mi)"] = week_table["Actual (mi)"].round(1)
 st.subheader("Planned vs. Actual Miles for Week of " + selected_week_start.strftime("%b %d, %Y"))
+display_week_table = week_table[["day", "Date", "planned_distance_mi", "Actual (mi)", "Runs"]].copy()
+display_week_table = display_week_table.rename(columns={"day": "Day", "planned_distance_mi": "Planned (mi)"})
+display_week_table["Planned (mi)"] = display_week_table["Planned (mi)"].map(lambda value: f"{value:.1f}")
+display_week_table["Actual (mi)"] = display_week_table["Actual (mi)"].map(lambda value: f"{value:.1f}")
 styled_week_table = (
-    week_table[["Day", "Date", "Planned (mi)", "Actual (mi)", "Runs"]]
-    .style.apply(
+    display_week_table.style.apply(
         lambda col: [
             f"background-color: {PLANNED_FILL}; color: {PLANNED_TEXT}; font-weight: 600;"
             if col.name == "Planned (mi)"
