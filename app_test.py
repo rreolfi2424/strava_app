@@ -358,5 +358,5 @@ edited_plan_df = st.data_editor(
 
 if edited_plan_df is not None:
     edited_plan_df = edited_plan_df.copy()
-    edited_plan_df["week_start"] = selected_week_key
+    edited_plan_df["Week Start"] = selected_week_key
     save_plan(edited_plan_df, week_start=selected_week_start)
