@@ -276,7 +276,7 @@ weekly_totals_df["planned_miles"] = plan_totals
 st.subheader("Running miles by week (last 3 months)")
 st.line_chart(
     weekly_totals_df.set_index("week_start")[["miles", "planned_miles"]],
-    color=["#7c4dff", "#b794f6"],
+    color=["#a02196", "#8200ec"],
 )
 
 selected_week_label = st.selectbox(
@@ -320,8 +320,8 @@ st.dataframe(week_table[["Day", "Date", "Planned (mi)", "Actual (mi)", "Runs"]],
 st.divider()
 
 st.subheader("Plan for selected week")
-plan_total = round(plan_df["planned_distance_mi"].sum(), 2)
-st.metric("Planned miles for this week", plan_total)
+# plan_total = round(plan_df["planned_distance_mi"].sum(), 2)
+# st.metric("Planned miles for this week", plan_total)
 
 st.caption("Edit the week plan directly below. Changes are saved for the selected week as you work.")
 
