@@ -126,7 +126,7 @@ def load_plan(week_start=None):
     if "planned_distance_mi" not in df.columns:
         df["planned_distance_mi"] = 0.0
 
-    df["planned_distance_mi"] = pd.to_numeric(df["planned_distance_mi"], errors="coerce").fillna(0)
+    df["planned_distance_mi"] = pd.to_numeric(df["planned_distance_mi"], errors="coerce").fillna(0).round(1)
     df["week_start"] = df["week_start"].fillna("").astype(str)
 
     if week_start is None:
@@ -160,7 +160,7 @@ def save_plan(df, week_start=None):
             week_df["type"] = "Run"
         if "planned_distance_mi" not in week_df.columns:
             week_df["planned_distance_mi"] = 0.0
-        week_df["planned_distance_mi"] = pd.to_numeric(week_df["planned_distance_mi"], errors="coerce").fillna(0)
+        week_df["planned_distance_mi"] = pd.to_numeric(week_df["planned_distance_mi"], errors="coerce").fillna(0).round(1)
         week_df["week_start"] = week_df["week_start"].fillna("").astype(str)
 
     if week_start is not None:
@@ -314,9 +314,9 @@ weekly_totals_df["week_label"] = weekly_totals_df["week_start"].dt.strftime("%b 
 plan_totals = []
 for week_start in weekly_totals_df["week_start"]:
     week_plan = load_plan(week_start)
-    plan_totals.append(round(week_plan["planned_distance_mi"].sum(), 2))
+    plan_totals.append(round(week_plan["planned_distance_mi"].sum(), 1))
 
-weekly_totals_df["Planned Miles"] = plan_totals
+weekly_totals_df["Planned Miles"] = pd.Series(plan_totals).round(1)
 
 st.subheader("Running miles by week (last 3 months)")
 st.line_chart(
@@ -335,7 +335,7 @@ selected_week_key = selected_week_start.strftime("%Y-%m-%d")
 week_runs = runs[(runs["start_date"] >= selected_week_start) & (runs["start_date"] < selected_week_start + pd.Timedelta(days=7))]
 selected_week_total = round(week_runs["distance_mi"].sum(), 1)
 plan_df = load_plan(selected_week_start)
-planned_week_total = round(plan_df["planned_distance_mi"].sum(), 2)
+planned_week_total = round(plan_df["planned_distance_mi"].sum(), 1)
 weekly_delta = round(selected_week_total - planned_week_total, 1)
 col1, col2 = st.columns(2)
 with col1:
@@ -354,7 +354,7 @@ with col2:
         f"""
         <div class="metric-card planned">
             <div class="metric-label">Planned miles</div>
-            <div class="metric-value">{planned_week_total:.2f}</div>
+            <div class="metric-value">{planned_week_total:.1f}</div>
             <div class="metric-subtext">Target for selected week</div>
         </div>
         """,
@@ -368,23 +368,25 @@ for offset in range(7):
     day_runs = week_runs[(week_runs["start_date"] >= day_start) & (week_runs["start_date"] < day_end)]
     day_name = day_start.strftime("%A")
     planned_day_rows = plan_df[(plan_df["day"] == day_name) & (plan_df["type"] == "Run")]
-    planned_miles = round(planned_day_rows["planned_distance_mi"].sum(), 2) if not planned_day_rows.empty else 0.0
+    planned_miles = round(planned_day_rows["planned_distance_mi"].sum(), 1) if not planned_day_rows.empty else 0.0
     rows.append({
-        "day": day_name,
+        "Day": day_name,
         "Date": day_start.strftime("%b %d"),
-        "planned_distance_mi": planned_miles,
+        "Planned (mi)": planned_miles,
         "Actual (mi)": round(day_runs["distance_mi"].sum(), 1),
         "Runs": "; ".join(day_runs["name"].tolist()) if not day_runs.empty else "No runs",
     })
 
 week_table = pd.DataFrame(rows)
+week_table["Planned (mi)"] = week_table["Planned (mi)"].round(1)
+week_table["Actual (mi)"] = week_table["Actual (mi)"].round(1)
 st.subheader("Planned vs. Actual Miles for Week of " + selected_week_start.strftime("%b %d, %Y"))
 styled_week_table = (
-    week_table[["day", "Date", "planned_distance_mi", "Actual (mi)", "Runs"]]
+    week_table[["Day", "Date", "Planned (mi)", "Actual (mi)", "Runs"]]
     .style.apply(
         lambda col: [
             f"background-color: {PLANNED_FILL}; color: {PLANNED_TEXT}; font-weight: 600;"
-            if col.name == "planned_distance_mi"
+            if col.name == "Planned (mi)"
             else ""
             for _ in col
         ],
