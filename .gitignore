@@ -1,3 +1,5 @@
 .venv/
 __pycache__/
 .env
+strava-app-501416-4aa1867d43d4.json
+.streamlit/secret.toml
