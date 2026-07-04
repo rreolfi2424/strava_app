@@ -259,6 +259,7 @@ today = datetime.now(timezone.utc)
 monday = (today - timedelta(days=today.weekday())).replace(
     hour=0, minute=0, second=0, microsecond=0
 )
+monday = monday.replace(tzinfo=None)
 
 this_week = runs[runs["start_date"] >= monday].copy()
 this_week["day"] = this_week["start_date"].dt.day_name()
