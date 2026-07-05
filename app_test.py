@@ -527,9 +527,12 @@ edited_plan_df = st.data_editor(
     key=f"plan_editor_{selected_week_key}",
 )
 
-if edited_plan_df is not None:
+if st.button("Save plan", key=f"save_plan_{selected_week_key}") and edited_plan_df is not None:
     edited_plan_df = edited_plan_df.copy()
     edited_plan_df["week_start"] = selected_week_key
-    save_plan(edited_plan_df, week_start=selected_week_start)
-    _load_all_plan_rows.clear()  # invalidate the cached plan data so the next load reflects the update
-    st.rerun()  # refresh the app to show updated plan and totals
+    if save_plan(edited_plan_df, week_start=selected_week_start):
+        _load_all_plan_rows.clear()  # invalidate the cached plan data so the next load reflects the update
+        st.success("Plan saved.")
+        st.rerun()
+    else:
+        st.warning("Plan save was not completed due to Google Sheets limits or connectivity.")
