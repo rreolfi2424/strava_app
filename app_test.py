@@ -358,6 +358,8 @@ for week_start in weekly_totals_df["week_start"]:
 
 weekly_totals_df["Planned Miles"] = pd.Series(plan_totals).round(1)
 
+current_week_start = (now - pd.to_timedelta(now.weekday(), unit="D")).normalize()
+
 st.subheader("Running miles by week (last 3 months)")
 chart_data = weekly_totals_df[["week_start", "Actual Miles", "Planned Miles"]].copy()
 chart_data = chart_data.rename(columns={"week_start": "Week"})
@@ -401,7 +403,7 @@ current_week_rule = (
 st.altair_chart(line_chart + label_chart + current_week_rule, use_container_width=True)
 
 week_labels = weekly_totals_df["week_label"].tolist()
-current_week_start = (now - pd.to_timedelta(now.weekday(), unit="D")).normalize()
+# current_week_start = (now - pd.to_timedelta(now.weekday(), unit="D")).normalize()
 current_week_row = weekly_totals_df[weekly_totals_df["week_start"] == current_week_start]
 if current_week_row.empty:
     current_week_label = week_labels[-1]
