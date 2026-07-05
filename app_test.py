@@ -123,8 +123,8 @@ def get_sheet():
     except Exception:
         return None
 
-@st.cache_data(ttl=30)  # only re-fetch from Sheets every 30 seconds
-def load_plan(week_start=None):
+@st.cache_data(ttl=300)
+def _load_all_plan_rows():
     sheet = get_sheet()
     if sheet is None:
         return _empty_plan_df()
@@ -153,7 +153,11 @@ def load_plan(week_start=None):
 
     df["planned_distance_mi"] = pd.to_numeric(df["planned_distance_mi"], errors="coerce").fillna(0).round(1)
     df["week_start"] = df["week_start"].fillna("").astype(str)
+    return df
 
+
+def load_plan(week_start=None):
+    df = _load_all_plan_rows()
     if week_start is None:
         return df
 
@@ -209,6 +213,7 @@ def save_plan(df, week_start=None):
             for row in combined.itertuples(index=False, name=None):
                 values.append([str(item) for item in row])
             sheet.update(values)
+        _load_all_plan_rows.clear()
         return True
     except Exception as exc:
         st.warning(f"Unable to save weekly plan to Google Sheets: {exc}")
