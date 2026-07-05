@@ -531,10 +531,9 @@ if edited_plan_df is not None:
     live_week_total = round(pd.to_numeric(edited_plan_df["planned_distance_mi"], errors="coerce").fillna(0).sum(), 1)
     st.markdown(
         f"""
-        <div class="metric-card planned" style="max-width: 360px; margin-top: 10px;">
-            <div class="metric-label">Live planned total</div>
-            <div class="metric-value">{live_week_total:.1f} mi</div>
-            <div class="metric-subtext">Updates as you edit the week plan</div>
+        <div class="metric-card planned" style="max-width: 220px; margin-top: 8px; padding: 8px 10px; border-radius: 8px; box-shadow: none; opacity: 0.9;">
+            <div class="metric-label" style="font-size: 0.7rem;">Live planned total</div>
+            <div class="metric-value" style="font-size: 1.1rem; margin-top: 2px;">{live_week_total:.1f} mi</div>
         </div>
         """,
         unsafe_allow_html=True,
