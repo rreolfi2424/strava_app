@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 
+import altair as alt
 import pandas as pd
 import requests
 import streamlit as st
@@ -358,10 +359,46 @@ for week_start in weekly_totals_df["week_start"]:
 weekly_totals_df["Planned Miles"] = pd.Series(plan_totals).round(1)
 
 st.subheader("Running miles by week (last 3 months)")
-st.line_chart(
-    weekly_totals_df.set_index("week_start")[["Actual Miles", "Planned Miles"]],
-    color=[ACTUAL_COLOR, PLANNED_COLOR],
+chart_data = weekly_totals_df[["week_start", "Actual Miles", "Planned Miles"]].copy()
+chart_data = chart_data.rename(columns={"week_start": "Week"})
+chart_data = chart_data.melt(id_vars=["Week"], var_name="Series", value_name="Miles")
+
+current_week_marker = current_week_start
+if current_week_marker not in chart_data["Week"].values:
+    current_week_marker = chart_data["Week"].iloc[-1]
+
+line_chart = (
+    alt.Chart(chart_data)
+    .mark_line(point=True, strokeWidth=2.5)
+    .encode(
+        x=alt.X("Week:T", title="Week"),
+        y=alt.Y("Miles:Q", title="Miles"),
+        color=alt.Color(
+            "Series:N",
+            scale=alt.Scale(domain=["Actual Miles", "Planned Miles"], range=[ACTUAL_COLOR, PLANNED_COLOR]),
+            legend=alt.Legend(title="Series"),
+        ),
+    )
 )
+label_chart = (
+    alt.Chart(chart_data)
+    .mark_text(dy=-8, fontSize=11, fontWeight="bold")
+    .encode(
+        x="Week:T",
+        y="Miles:Q",
+        text=alt.Text("Miles:Q", format=".1f"),
+        color=alt.Color(
+            "Series:N",
+            scale=alt.Scale(domain=["Actual Miles", "Planned Miles"], range=[ACTUAL_COLOR, PLANNED_COLOR]),
+        ),
+    )
+)
+current_week_rule = (
+    alt.Chart(pd.DataFrame({"Week": [current_week_marker]}))
+    .mark_rule(strokeDash=[6, 4], color="#ffffff", size=2)
+    .encode(x="Week:T")
+)
+st.altair_chart(line_chart + label_chart + current_week_rule, use_container_width=True)
 
 week_labels = weekly_totals_df["week_label"].tolist()
 current_week_start = (now - pd.to_timedelta(now.weekday(), unit="D")).normalize()
@@ -492,5 +529,5 @@ if edited_plan_df is not None:
     edited_plan_df = edited_plan_df.copy()
     edited_plan_df["week_start"] = selected_week_key
     save_plan(edited_plan_df, week_start=selected_week_start)
-    load_plan.clear()  # invalidate the cache so next load reflects the update
+    _load_all_plan_rows.clear()  # invalidate the cached plan data so the next load reflects the update
     st.rerun()  # refresh the app to show updated plan and totals
