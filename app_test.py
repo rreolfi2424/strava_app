@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -97,25 +98,49 @@ SCOPES = [
 ]
 
 
+def _empty_plan_df():
+    return pd.DataFrame(columns=["week_start", "day", "type", "planned_distance_mi"])
+
+
 @st.cache_resource
 def get_sheet():
-    creds = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"], scopes=SCOPES
-    )
-    client = gspread.authorize(creds)
-    sheet = client.open(st.secrets["SHEET_NAME"]).sheet1
-    return sheet
+    service_account = get_secret("gcp_service_account")
+    sheet_name = get_secret("SHEET_NAME")
 
+    if not service_account or not sheet_name:
+        return None
 
+    if isinstance(service_account, str):
+        try:
+            service_account = json.loads(service_account)
+        except json.JSONDecodeError:
+            return None
+
+    try:
+        creds = Credentials.from_service_account_info(service_account, scopes=SCOPES)
+        client = gspread.authorize(creds)
+        return client.open(sheet_name).sheet1
+    except Exception:
+        return None
+
+@st.cache_data(ttl=30)  # only re-fetch from Sheets every 30 seconds
 def load_plan(week_start=None):
     sheet = get_sheet()
-    records = sheet.get_all_records()
+    if sheet is None:
+        return _empty_plan_df()
+
+    try:
+        records = sheet.get_all_records()
+    except Exception as exc:
+        st.warning(f"Unable to read weekly plan from Google Sheets: {exc}")
+        return _empty_plan_df()
+
     if not records:
-        return pd.DataFrame(columns=["week_start", "day", "type", "planned_distance_mi"])
+        return _empty_plan_df()
 
     df = pd.DataFrame(records)
     if df.empty:
-        return pd.DataFrame(columns=["week_start", "day", "type", "planned_distance_mi"])
+        return _empty_plan_df()
 
     if "week_start" not in df.columns:
         df["week_start"] = ""
@@ -142,43 +167,52 @@ def load_plan(week_start=None):
         legacy["week_start"] = week_key
         return legacy
 
-    return pd.DataFrame(columns=["week_start", "day", "type", "planned_distance_mi"])
+    return _empty_plan_df()
 
 
 def save_plan(df, week_start=None):
     sheet = get_sheet()
-    existing = load_plan()
+    if sheet is None:
+        st.warning("Google Sheets is unavailable, so the weekly plan could not be saved.")
+        return False
 
-    week_df = pd.DataFrame(columns=["week_start", "day", "type", "planned_distance_mi"])
-    if not df.empty:
-        week_df = df.copy()
-        if "week_start" not in week_df.columns:
-            week_df["week_start"] = ""
-        if "day" not in week_df.columns:
-            week_df["day"] = ""
-        if "type" not in week_df.columns:
-            week_df["type"] = "Run"
-        if "planned_distance_mi" not in week_df.columns:
-            week_df["planned_distance_mi"] = 0.0
-        week_df["planned_distance_mi"] = pd.to_numeric(week_df["planned_distance_mi"], errors="coerce").fillna(0).round(1)
-        week_df["week_start"] = week_df["week_start"].fillna("").astype(str)
+    try:
+        existing = load_plan()
 
-    if week_start is not None:
-        week_key = week_start.strftime("%Y-%m-%d") if hasattr(week_start, "strftime") else str(week_start)
-        existing = existing[existing["week_start"] != week_key]
-        week_df["week_start"] = week_key
-        combined = pd.concat([existing, week_df], ignore_index=True)
-    else:
-        combined = week_df
+        week_df = _empty_plan_df()
+        if not df.empty:
+            week_df = df.copy()
+            if "week_start" not in week_df.columns:
+                week_df["week_start"] = ""
+            if "day" not in week_df.columns:
+                week_df["day"] = ""
+            if "type" not in week_df.columns:
+                week_df["type"] = "Run"
+            if "planned_distance_mi" not in week_df.columns:
+                week_df["planned_distance_mi"] = 0.0
+            week_df["planned_distance_mi"] = pd.to_numeric(week_df["planned_distance_mi"], errors="coerce").fillna(0).round(1)
+            week_df["week_start"] = week_df["week_start"].fillna("").astype(str)
 
-    sheet.clear()
-    if combined.empty:
-        sheet.update([["week_start", "day", "type", "planned_distance_mi"]])
-    else:
-        values = [combined.columns.astype(str).tolist()]
-        for row in combined.itertuples(index=False, name=None):
-            values.append([str(item) for item in row])
-        sheet.update(values)
+        if week_start is not None:
+            week_key = week_start.strftime("%Y-%m-%d") if hasattr(week_start, "strftime") else str(week_start)
+            existing = existing[existing["week_start"] != week_key]
+            week_df["week_start"] = week_key
+            combined = pd.concat([existing, week_df], ignore_index=True)
+        else:
+            combined = week_df
+
+        sheet.clear()
+        if combined.empty:
+            sheet.update([["week_start", "day", "type", "planned_distance_mi"]])
+        else:
+            values = [combined.columns.astype(str).tolist()]
+            for row in combined.itertuples(index=False, name=None):
+                values.append([str(item) for item in row])
+            sheet.update(values)
+        return True
+    except Exception as exc:
+        st.warning(f"Unable to save weekly plan to Google Sheets: {exc}")
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -453,3 +487,5 @@ if edited_plan_df is not None:
     edited_plan_df = edited_plan_df.copy()
     edited_plan_df["week_start"] = selected_week_key
     save_plan(edited_plan_df, week_start=selected_week_start)
+    load_plan.clear()  # invalidate the cache so next load reflects the update
+    st.rerun()  # refresh the app to show updated plan and totals
