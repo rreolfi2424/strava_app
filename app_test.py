@@ -527,6 +527,19 @@ edited_plan_df = st.data_editor(
     key=f"plan_editor_{selected_week_key}",
 )
 
+if edited_plan_df is not None:
+    live_week_total = round(pd.to_numeric(edited_plan_df["planned_distance_mi"], errors="coerce").fillna(0).sum(), 1)
+    st.markdown(
+        f"""
+        <div class="metric-card planned" style="max-width: 360px; margin-top: 10px;">
+            <div class="metric-label">Live planned total</div>
+            <div class="metric-value">{live_week_total:.1f} mi</div>
+            <div class="metric-subtext">Updates as you edit the week plan</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 if st.button("Save plan", key=f"save_plan_{selected_week_key}") and edited_plan_df is not None:
     edited_plan_df = edited_plan_df.copy()
     edited_plan_df["week_start"] = selected_week_key
