@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from datetime import datetime, timedelta, timezone
 
 import altair as alt
@@ -13,10 +14,10 @@ from google.oauth2.service_account import Credentials
 
 load_dotenv()
 
-ACTUAL_COLOR = "#ff6f91"
-PLANNED_COLOR = "#7c4dff"
-ACTUAL_FILL = "#3a2028"
-PLANNED_FILL = "#241b47"
+ACTUAL_COLOR = "#dc29ec"
+PLANNED_COLOR = "#7140f8"
+ACTUAL_FILL = "#4c0e4a"
+PLANNED_FILL = "#1f144c"
 ACTUAL_TEXT = "#ffe8ee"
 PLANNED_TEXT = "#efe8ff"
 
@@ -24,11 +25,61 @@ PLANNED_TEXT = "#efe8ff"
 # Secrets helper (works both locally with .env and on Streamlit Cloud)
 # ---------------------------------------------------------------------------
 
-def get_secret(key):
+def _load_local_secrets():
+    secrets_path = os.path.join(os.path.dirname(__file__), ".streamlit", "secrets.toml")
+    if not os.path.exists(secrets_path):
+        return {}
+
     try:
-        return st.secrets[key]
-    except (KeyError, FileNotFoundError):
-        return os.getenv(key)
+        import tomllib
+
+        with open(secrets_path, "rb") as secrets_file:
+            return tomllib.load(secrets_file)
+    except Exception:
+        return {}
+
+
+def _find_secret(data, key):
+    if isinstance(data, dict):
+        if key in data:
+            return data[key]
+        for value in data.values():
+            result = _find_secret(value, key)
+            if result is not None:
+                return result
+    return None
+
+
+def get_secret(key):
+    value = None
+    try:
+        value = st.secrets[key]
+    except (KeyError, FileNotFoundError, AttributeError, TypeError):
+        pass
+
+    if value is None:
+        try:
+            value = _find_secret(dict(st.secrets))
+        except Exception:
+            value = None
+
+    if value is None:
+        local_secrets = _load_local_secrets()
+        if isinstance(local_secrets, dict):
+            value = _find_secret(local_secrets, key)
+
+    if value is None:
+        value = os.getenv(key)
+
+    return value
+
+
+def stop_app():
+    try:
+        st.stop()
+    except Exception:
+        pass
+    sys.exit(0)
 
 
 # ---------------------------------------------------------------------------
@@ -46,9 +97,9 @@ def get_access_token():
     response = requests.post(
         "https://www.strava.com/oauth/token",
         data={
-            "client_id": os.getenv("STRAVA_CLIENT_ID"),
-            "client_secret": os.getenv("STRAVA_CLIENT_SECRET"),
-            "refresh_token": os.getenv("STRAVA_REFRESH_TOKEN"),
+            "client_id": get_secret("STRAVA_CLIENT_ID"),
+            "client_secret": get_secret("STRAVA_CLIENT_SECRET"),
+            "refresh_token": get_secret("STRAVA_REFRESH_TOKEN"),
             "grant_type": "refresh_token",
         },
         timeout=20,
@@ -232,7 +283,7 @@ st.markdown(
     """
     <style>
     .stApp {
-        background: linear-gradient(135deg, #140c24 0%, #1d1133 100%);
+        background: linear-gradient(135deg, #020417 0%, #06102e 100%);
         color: #f3ebff;
     }
     .stTitle, .stSubheader, .stHeader {
@@ -266,11 +317,11 @@ st.markdown(
         box-shadow: 0 8px 24px rgba(0,0,0,0.18);
     }
     .metric-card.actual {
-        background: linear-gradient(135deg, #3a2028 0%, #5a2736 100%);
+        background: linear-gradient(135deg, #4c0e4a 0%, #4c0e4a 100%);
         border-color: #ff6f91;
     }
     .metric-card.planned {
-        background: linear-gradient(135deg, #241b47 0%, #3a2b67 100%);
+        background: linear-gradient(135deg, #1f144c 0%, #1f144c 100%);
         border-color: #7c4dff;
     }
     .metric-card .metric-label {
@@ -304,22 +355,22 @@ try:
     df = get_activities(token)
 except Exception as exc:
     st.error(f"Unable to load Strava data: {exc}")
-    st.stop()
+    stop_app()
 
 if df.empty:
     st.info("No Strava activities were returned.")
-    st.stop()
+    stop_app()
 
 required_columns = {"type", "start_date_local", "distance", "name"}
 missing_columns = required_columns.difference(df.columns)
 if missing_columns:
     st.error(f"The Strava response is missing expected columns: {', '.join(sorted(missing_columns))}")
-    st.stop()
+    stop_app()
 
 runs = df[df["type"] == "Run"].copy()
 if runs.empty:
     st.info("No running activities were found.")
-    st.stop()
+    stop_app()
 
 runs["start_date"] = pd.to_datetime(runs["start_date_local"]).dt.tz_localize(None)
 runs["distance_mi"] = round(runs["distance"] / 1000 * 0.621371, 1)
@@ -330,7 +381,7 @@ runs = runs[runs["start_date"] >= three_months_ago].copy()
 
 if runs.empty:
     st.info("No recent running activities were found in the last 3 months.")
-    st.stop()
+    stop_app()
 
 runs["week_start"] = runs["start_date"].dt.to_period("W-MON").apply(lambda period: period.start_time)
 
@@ -364,6 +415,7 @@ st.subheader("Running miles by week (last 3 months)")
 chart_data = weekly_totals_df[["week_start", "Actual Miles", "Planned Miles"]].copy()
 chart_data = chart_data.rename(columns={"week_start": "Week"})
 chart_data = chart_data.melt(id_vars=["Week"], var_name="Series", value_name="Miles")
+chart_data = chart_data[~((chart_data["Series"] == "Planned Miles") & (chart_data["Miles"] == 0))].copy()
 
 current_week_marker = current_week_start
 if current_week_marker not in chart_data["Week"].values:
@@ -378,7 +430,7 @@ line_chart = (
         color=alt.Color(
             "Series:N",
             scale=alt.Scale(domain=["Actual Miles", "Planned Miles"], range=[ACTUAL_COLOR, PLANNED_COLOR]),
-            legend=alt.Legend(title="Series"),
+            legend=alt.Legend(title="", orient="bottom", direction="horizontal", offset=10),
         ),
     )
 )
@@ -392,6 +444,7 @@ label_chart = (
         color=alt.Color(
             "Series:N",
             scale=alt.Scale(domain=["Actual Miles", "Planned Miles"], range=[ACTUAL_COLOR, PLANNED_COLOR]),
+            legend=None,
         ),
     )
 )
