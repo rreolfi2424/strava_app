@@ -453,7 +453,8 @@ current_week_rule = (
     .mark_rule(strokeDash=[6, 4], color="#ffffff", size=2)
     .encode(x="Week:T")
 )
-st.altair_chart(line_chart + label_chart + current_week_rule, use_container_width=True)
+chart = (line_chart + label_chart + current_week_rule).configure_view(fill="transparent").properties(background="transparent")
+st.altair_chart(chart, use_container_width=True)
 
 week_labels = weekly_totals_df["week_label"].tolist()
 # current_week_start = (now - pd.to_timedelta(now.weekday(), unit="D")).normalize()
