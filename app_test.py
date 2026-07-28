@@ -348,14 +348,21 @@ st.markdown(
 
 st.title("RR Running Tracker")
 
-df = pd.DataFrame()
+if "strava_data" not in st.session_state:
+    try:
+        token = get_access_token()
+        st.session_state["strava_token"] = token
+        st.session_state["strava_data"] = get_activities(token)
+    except Exception as exc:
+        st.error(f"Unable to load Strava data: {exc}")
+        stop_app()
 
-try:
-    token = get_access_token()
-    df = get_activities(token)
-except Exception as exc:
-    st.error(f"Unable to load Strava data: {exc}")
-    stop_app()
+if st.button("Refresh Strava data"):
+    st.session_state.pop("strava_token", None)
+    st.session_state.pop("strava_data", None)
+    st.rerun()
+
+df = st.session_state.get("strava_data", pd.DataFrame())
 
 if df.empty:
     st.info("No Strava activities were returned.")
